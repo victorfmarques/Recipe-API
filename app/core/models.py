@@ -19,9 +19,9 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password=None):
         ''' Cria e salva um novo superusuário'''
         user = self.create_user(email = email, password =  password)
-        user.is_staff       = True
-        user.is_superuser   = True
-        user.save(using = self.db)
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(using=self.db)
 
         return user
 
@@ -29,8 +29,8 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     ''' Usuário customizado que utiliza email ao invés do username '''
-    email       = models.EmailField(max_length = 255, unique = True)
-    name        = models.CharField(max_length = 255)   
+    email       = models.EmailField(max_length=255, unique = True)
+    name        = models.CharField(max_length=255)   
     is_active   = models.BooleanField(default=True)
     is_staff    = models.BooleanField(default=False)
 
