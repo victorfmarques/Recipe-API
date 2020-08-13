@@ -1,4 +1,4 @@
-from django.contrib.atuh import get_user_model
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.test import TestCase
 
@@ -10,7 +10,7 @@ from core.models import Ingredient
 from recipe.serializers import IngredientSerializer
 
 
-INGREDIENTS_URL = reverse('recipe:ingredients-list')
+INGREDIENTS_URL = reverse('recipe:ingredient-list')
 
 
 class PublicIngredientTests(TestCase):
@@ -31,14 +31,14 @@ class PrivateIngredientTests(TestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(
-            'email':'test@test.com',
-            'password': 'vapovapvapo'
-            'name': 'zezas'
+            email='test@test.com',
+            password='vapovapvapo',
+            name='zezas'
         )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
-    def test_retrieve_ingredient_list(self)
+    def test_retrieve_ingredient_list(self):
         ''' Teste de listagem de ingredients '''
         Ingredient.objects.create(name='pão', user=self.user)
         Ingredient.objects.create(name='arroz', user=self.user)
@@ -52,9 +52,9 @@ class PrivateIngredientTests(TestCase):
 
     def test_ingredients_limited_to_user(self):
         ''' Teste que valida se os ingredientes listados são de autoria do usuário '''
-        user_2  = get_user_model().objects.crete_user(
+        user_2  = get_user_model().objects.create_user(
             name='nome',
-            email='nome@emai.com'
+            email='nome@emai.com',
             password='senhadonome'
         )        
         ingrediente_user = Ingredient.objects.create(name='pão', user=self.user)
@@ -73,7 +73,7 @@ class PrivateIngredientTests(TestCase):
         }
         res = self.client.post(INGREDIENTS_URL, payload)
 
-        exists = Ingredient.objects.fitler(
+        exists = Ingredient.objects.filter(
             user = self.user,
             name = payload['name']
         ).exists()
