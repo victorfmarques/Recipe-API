@@ -6,37 +6,31 @@ from core.models import Tag, Ingredient
 
 from recipe import serializers
 
-class TagViewSet(viewsets.GenericViewSet,
-                 mixins.ListModelMixin,
-                 mixins.CreateModelMixin):
-    ''' Lida com as tags no BD '''
+
+class BaseRecipeAttrViewset(viewsets.GenericViewSet,
+                            mixins.ListModelMixin,
+                            mixins.CreateModelMixin
+                            ):
+    ''' Classe base contendo os atributos de name e user '''
     authentication_classes = (TokenAuthentication,)
     permission_classes = (IsAuthenticated,)
+    
+    def get_queryset(self):
+        ''' Retorna queryset contendo somente referencias do usuário atual '''
+        return self.queryset.filter(user=self.request.user).order_by('-name')
+
+    def perform_create(self, serializer):
+        ''' Realiza a criação referente ao serializer da classe '''
+        serializer.save(user=self.request.user)
+    
+
+class TagViewSet(BaseRecipeAttrViewset):
+    ''' Lida com as tags no BD '''
     queryset = Tag.objects.all()
     serializer_class = serializers.TagSerializer
 
-    def get_queryset(self):
-        ''' Retorna o queryset somente com recipes do usuário autenticado'''
-        return self.queryset.filter(user=self.request.user).order_by('-name')
 
-    def perform_create(self, serializer):
-        ''' Cria uma nova tag '''
-        serializer.save(user = self.request.user)
-
-
-class IngredientViewSet(viewsets.GenericViewSet,
-                        mixins.ListModelMixin,
-                        mixins.CreateModelMixin
-                        ):
+class IngredientViewSet(BaseRecipeAttrViewset):
     ''' Lida com ingredients no BD '''
-    authentication_classes = (TokenAuthentication,)
-    permission_classes = (IsAuthenticated,)
     queryset = Ingredient.objects.all()
     serializer_class = serializers.IngredientSerializer
-
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user).order_by('-name')
-
-    def perform_create(self, serializer):
-        ''' Cria um novo ingredient '''
-        serializer.save(user = self.request.user)
