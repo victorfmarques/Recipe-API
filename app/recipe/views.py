@@ -48,3 +48,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
         ''' Retorna as Recipes do usuário da requisição '''
         return self.queryset.filter(user=self.request.user).order_by('-id')
     
+    def get_serializer_class(self):
+        ''' Retorna a classe de serializer apropriada '''
+        if self.action == 'retrieve':
+            return serializers.RecipeDetailSerializer
+        
+        return self.serializer_class
