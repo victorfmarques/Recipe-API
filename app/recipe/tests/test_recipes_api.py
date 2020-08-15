@@ -1,3 +1,10 @@
+import os
+import tempfile
+
+from PIL import Image
+
+from unittest.mock import patch
+
 from django.urls import reverse
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -5,12 +12,16 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from core.models import Recipe, Tag, Ingredient
+from core import models
 
 from recipe.serializers import RecipeSerializer, RecipeDetailSerializer
 
 
 RECIPES_URL = reverse('recipe:recipe-list')
+
+def image_upload_url(recipe_id):
+    ''' Retorna o URL de uma image upada de uma Recipe '''
+    return reverse('recipe:recipe-upload-image', args=[recipe_id])
 
 def detail_url(recipe_id):
     ''' Retorna o URL de um detalhe de Recipe '''
@@ -18,11 +29,11 @@ def detail_url(recipe_id):
 
 def sample_tag(user, name='TAG TESTE'):
     ''' Cria e retorna uma Tag '''
-    return Tag.objects.create(user=user, name=name)
+    return models.Tag.objects.create(user=user, name=name)
 
 def sample_ingredient(user, name='canela'):
     ''' Cria e retorna um Ingredient '''
-    return Ingredient.objects.create(user=user, name=name)
+    return models.Ingredient.objects.create(user=user, name=name)
 
 def sample_recipe(user, **params):
     '''Cria e retorna uma Recipe'''
@@ -33,7 +44,7 @@ def sample_recipe(user, **params):
     }
     defaults.update(params)
 
-    return Recipe.objects.create(user=user, **defaults)
+    return models.Recipe.objects.create(user=user, **defaults)
 
 
 class PublicRecipeApiTests(TestCase):
@@ -66,7 +77,7 @@ class PrivateRecipeApiTests(TestCase):
         sample_recipe(user=self.user)
         sample_recipe(user=self.user)
 
-        recipes = Recipe.objects.all().order_by('-id')
+        recipes = models.Recipe.objects.all().order_by('-id')
         serialized = RecipeSerializer(recipes, many=True)
 
         res = self.client.get(RECIPES_URL)
@@ -84,7 +95,7 @@ class PrivateRecipeApiTests(TestCase):
         sample_recipe(self.user)
         sample_recipe(user_2)   
 
-        recipes = Recipe.objects.filter(user=self.user).order_by('-id')
+        recipes = models.Recipe.objects.filter(user=self.user).order_by('-id')
         serialized = RecipeSerializer(recipes, many=True)
 
         res = self.client.get(RECIPES_URL)
@@ -116,7 +127,7 @@ class PrivateRecipeApiTests(TestCase):
         res = self.client.post(RECIPES_URL, payload)
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        recipe = Recipe.objects.get(id=res.data['id'])
+        recipe = models.Recipe.objects.get(id=res.data['id'])
         for key in payload.keys():
             self.assertEqual(payload[key], getattr(recipe, key))
     
@@ -133,7 +144,7 @@ class PrivateRecipeApiTests(TestCase):
         res = self.client.post(RECIPES_URL, payload)
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        recipe = Recipe.objects.get(id=res.data['id'])
+        recipe = models.Recipe.objects.get(id=res.data['id'])
         tags = recipe.tags.all()
         self.assertEqual(tags.count(), 2)
         self.assertIn(tag1, tags)
@@ -152,7 +163,7 @@ class PrivateRecipeApiTests(TestCase):
         res = self.client.post(RECIPES_URL, payload)
 
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        recipe = Recipe.objects.get(id=res.data['id'])
+        recipe = models.Recipe.objects.get(id=res.data['id'])
         ingredients = recipe.ingredients.all()
         self.assertEqual(ingredients.count(), 2)
         self.assertIn(ingredient1, ingredients)
@@ -198,3 +209,50 @@ class PrivateRecipeApiTests(TestCase):
 
         tags = recipe.tags.all()
         self.assertEqual(len(tags), 0)
+
+    @patch('uuid.uuid4')
+    def test_recipe_file_name_uuid(self, mock_uuid):
+        ''' Testa se a imagem é salva no lugar correto '''
+        uuid = 'test-uuid'
+        mock_uuid.return_value = uuid
+        file_path = models.recipe_image_file_path(None, 'myimage.jpg')
+
+        exe_path = f'uploads/recipe/{uuid}.jpg'
+        self.assertEqual(file_path, exe_path)
+
+
+class RecipeImageUploadTests(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            email='email@email.com',
+            password='password1234'
+        )
+        self.client.force_authenticate(self.user)
+        self.recipe = sample_recipe(user=self.user)
+
+    def tearDown(self):
+        self.recipe.image.delete()
+
+    def test_upload_image_to_recipe(self):
+        ''' Teste de upload de imagem para uma Recipe '''
+        url = image_upload_url(self.recipe.id)
+        with tempfile.NamedTemporaryFile(suffix='.jpg') as ntf:
+            img = Image.new('RGB', (10, 10))
+            img.save(ntf, format='JPEG')
+            ntf.seek(0)
+            res = self.client.post(url, {'image': ntf}, format='multipart')
+            
+        self.recipe.refresh_from_db()
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('image', res.data)
+        self.assertTrue(os.path.exists(self.recipe.image.path))
+
+    def test_upload_image_bad_request(self):
+        ''' Teste de upload de imagem incorreta '''
+        url = image_upload_url(self.recipe.id)
+        res = self.client.post(url, {'image': 'nadave'}, format='multipart')
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
